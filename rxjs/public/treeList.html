@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        ul {
+            list-style: none;
+        }
+
+        li {
+            width: 300px;
+            cursor: pointer;
+        }
+
+        .selected {
+            background-color: #f36;
+        }
+
+        .item-li>li {
+            margin-left: 20px;
+        }
+
+        .item-li-name {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <ul class="container"></ul>
+    <script src="https://unpkg.com/rxjs/bundles/Rx.min.js"></script>
+    <script>
+        const $container = document.querySelector('.container');
+
+        const createItem = item => {
+            const result = document.createElement('li');
+            const innerHTML = `<button type='button' class='button-toggle' id=${item.id}>+</button><span class='item-li-name'>${item.name}</span>`;
+            result.id = item.id;
+            result.classList.add('item-li');
+            result.innerHTML = innerHTML;
+            return result;
+        }
+
+        (function createTreeItems(container, id) {
+            const source = Rx.Observable
+                .ajax(`http://localhost:3000/data${id ? `?id=${id}` : ''}`)
+                .map(res => res.response)
+                .mergeMap(list => Rx.Observable.from(list)
+                    .map(createItem)
+                    .do($item => container.appendChild($item)))
+                .publishReplay(1)
+                .refCount();
+
+            const select = source
+                .mergeMap($item => Rx.Observable
+                    .fromEvent($item.querySelector('span'), 'click')
+                    .mapTo($item))
+                .do($item => {
+                    $container.querySelectorAll('span').forEach(item => {
+                        item.classList.remove('selected')
+                    })
+                    let $span = $item.querySelector('span');
+                    $span.classList.contains('selected') ? $span.classList.remove('selected') : $span.classList.add('selected')
+                })
+                .do($item => console.log(`选中 ${$item.getAttribute('id')}`));
+
+            const toggle = source
+                .mergeMap($item => Rx.Observable
+                    .fromEvent($item.querySelector('.button-toggle'), 'click')
+                    .do(event => {
+                        $item.querySelectorAll('li').length === 0 ?
+                            createTreeItems($item, event.target.id) :
+                            $item.querySelectorAll('li').forEach(li =>
+                                li.style.display === 'none' ? li.style.display = 'block' : li.style.display = 'none')
+                    })
+                    .mapTo($item))
+                .do($item => {
+                    const buttonToggle = $item.querySelector('.button-toggle');
+                    buttonToggle.innerHTML === '+' ? buttonToggle.innerHTML = '-' : buttonToggle.innerHTML = '+'
+                })
+                .do($item => console.log(`展开 ${$item.getAttribute('id')}`));
+
+            const app = toggle.merge(select);
+            app.subscribe();
+        })($container);
+    </script>
+</body>
+
+</html>
